@@ -5,6 +5,8 @@ from openpyxl import load_workbook
 from openpyxl.styles import Border, Side
 from openpyxl.utils import get_column_letter
 
+PASSWORD = "ME creation"
+
 # Function to process country data with given base year, base value, periods, and YoY changes
 def process_country_data(base_year, base_value, periods, yoy_changes, is_future=True):
     data = []
@@ -541,4 +543,10 @@ def main():
             st.warning("No data available. Please go back and input data.")
 
 if __name__ == "__main__":
-    main()
+    password = st.sidebar.text_input("Password", type="password")
+
+    # Check password
+    if password == PASSWORD:
+        main()  # If password is correct, run the app
+    else:
+        st.error("Incorrect password. Please try again.")
