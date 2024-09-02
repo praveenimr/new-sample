@@ -5,7 +5,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import Border, Side
 from openpyxl.utils import get_column_letter
 
-PASSWORD = "ME creation"
+PASSWORD = "IMR Creation"
 
 # Function to process country data with given base year, base value, periods, and YoY changes
 def process_country_data(base_year, base_value, periods, yoy_changes, is_future=True):
