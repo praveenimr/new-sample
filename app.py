@@ -5,8 +5,6 @@ from openpyxl import load_workbook
 from openpyxl.styles import Border, Side
 from openpyxl.utils import get_column_letter
 
-PASSWORD = "IMR Creation"
-
 # Function to process country data with given base year, base value, periods, and YoY changes
 def process_country_data(base_year, base_value, periods, yoy_changes, is_future=True):
     data = []
@@ -245,7 +243,11 @@ def format_excel_sheet(ws):
         add_total_row(ws, start_row, end_row, max_col_used, table_name_row, is_first_table, first_table_total_row_data, is_region_table, copy_first_row=not is_first_table)
         add_borders_to_table(ws, start_row, end_row, 1, max_col_used)
 
-def save_data_to_excel(base_model_data, region_data, country_data, segment_data, subsegment_data, filename):
+import io
+
+def save_data_to_excel(base_model_data, region_data, country_data, segment_data, subsegment_data):
+    output = io.BytesIO()  # Create a BytesIO buffer to hold the Excel data
+
     try:
         # Convert base model data to DataFrame
         base_model_df = pd.DataFrame(base_model_data, columns=['Year', 'Value'])
@@ -257,41 +259,29 @@ def save_data_to_excel(base_model_data, region_data, country_data, segment_data,
         region_df = pd.DataFrame(region_list)
         region_df.index.name = 'Region'
 
-        # Create an Excel writer object
-        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
-            # base_model_df.to_excel(writer, sheet_name='Global Data', index=False)
+        # Create an Excel writer object using the buffer
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
             region_df.to_excel(writer, sheet_name='Global Data', index_label='Region/year')
 
-            # Combine and transpose country data for each region
             for region in country_data[0][1]:
                 combined_country_data = {}
-
-                # Prepare combined country data table (years as columns)
                 for year, data in country_data:
                     if year not in combined_country_data:
                         combined_country_data[year] = data[region]
 
-                # Convert to DataFrame and transpose to have countries as rows and years as columns
                 combined_country_df = pd.DataFrame(combined_country_data)
                 combined_country_df.index.name = 'Country'
-
-                # Save transposed country data
                 combined_country_df.to_excel(writer, sheet_name=f'{region}', index_label='Country')
 
-                # Start row for segment and subsegment data
                 startrow = len(combined_country_df) + 3  # Leave a gap of one line
 
-                # Add segment and subsegment data under each country (no transposition here)
                 for country in combined_country_df.index:
                     for segment in segment_data[0][1][region][country]:
                         segment_data_dict = {}
-
-                        # Add segment data
                         for year, data in segment_data:
                             if country in data[region] and segment in data[region][country]:
                                 segment_data_dict[year] = {segment: data[region][country][segment]}
 
-                        # Add subsegment data under the same segment
                         for year, data in subsegment_data:
                             if country in data[region] and segment in data[region][country]:
                                 for subsegment, value in data[region][country][segment].items():
@@ -300,17 +290,14 @@ def save_data_to_excel(base_model_data, region_data, country_data, segment_data,
                                     else:
                                         segment_data_dict[year] = {subsegment: value}
 
-                        # Convert to DataFrame and include country name
                         segment_df = pd.DataFrame(segment_data_dict)
                         segment_df['Country'] = country
                         segment_df = segment_df.reset_index().rename(columns={'index': 'Year'})
-                        # Change "Year" to "Country Name/Year"
                         segment_df.columns = [f'{country}/Year' if col == 'Year' else col for col in segment_df.columns]
                         segment_df.drop(columns=['Country'], inplace=True)
                         segment_df.to_excel(writer, sheet_name=f'{region}', startrow=startrow, index=False)
                         startrow += len(segment_df) + 3  # Leave a gap of one line
 
-                # Accumulate subsegment data for the region table
                 region_subsegment_data = {}
                 for year, data in subsegment_data:
                     for country in data[region]:
@@ -324,64 +311,55 @@ def save_data_to_excel(base_model_data, region_data, country_data, segment_data,
                                     region_subsegment_data[year][segment][subsegment] = 0
                                 region_subsegment_data[year][segment][subsegment] += value
 
-                # Track if it's the first table in the sheet
                 is_first_table = True
 
-                # Convert region subsegment data to DataFrame and save it with segment value rows
                 for segment in region_subsegment_data[year]:
                     segment_subsegment_data = {}
-                    segment_total_values = {}  # Dictionary to store the total values for each segment per year
+                    segment_total_values = {}
 
                     for year in region_subsegment_data:
                         subsegment_values = region_subsegment_data[year][segment]
 
-                        # Exclude any 'year' row from the subsegment data
                         subsegment_values_filtered = {key: value for key, value in subsegment_values.items() if key != 'year'}
 
                         if is_first_table:
-                            # For the first table, calculate the sum of numeric values only (excluding the 'year' row)
                             segment_total_values[year] = sum(value for value in subsegment_values_filtered.values() if isinstance(value, (int, float)))
                         else:
-                            # For subsequent tables, set the total row to be the values from the second row (excluding 'year')
                             if len(subsegment_values_filtered) > 1:
-                                second_row_key = list(subsegment_values_filtered.keys())[1]  # Get the key of the second row
+                                second_row_key = list(subsegment_values_filtered.keys())[1]
                                 segment_total_values[year] = subsegment_values_filtered[second_row_key]
                             else:
-                                segment_total_values[year] = None  # Handle the case where there may not be enough rows
+                                segment_total_values[year] = None
 
-                        # Store the filtered subsegment data for this year
                         segment_subsegment_data[year] = subsegment_values_filtered
 
-                    # Create a DataFrame for the subsegment data
                     segment_subsegment_df = pd.DataFrame(segment_subsegment_data)
                     segment_subsegment_df.index.name = f'{region}/year'
 
-                    # Create a DataFrame for the segment total row
                     segment_total_row = pd.DataFrame(segment_total_values, index=[f'{segment}'])
 
-                    # Concatenate the total row with the subsegment data
                     segment_subsegment_df_with_total = pd.concat([segment_total_row, segment_subsegment_df])
 
-                    # Save the DataFrame with the total row to the Excel sheet
                     segment_subsegment_df_with_total.to_excel(writer, sheet_name=f'{region}', startrow=startrow, index_label=f'{region}/year')
-                    startrow += len(segment_subsegment_df_with_total) + 3  # Leave a gap of one line
+                    startrow += len(segment_subsegment_df_with_total) + 3
 
-                    # After the first table, set is_first_table to False
                     is_first_table = False
              
-        # Load the workbook and apply borders, totals, and CAGRs
-        wb = load_workbook(filename)
+        wb = load_workbook(output)
         for sheetname in wb.sheetnames:
             ws = wb[sheetname]
             format_excel_sheet(ws)
 
-        wb.save(filename)
-        print(f"Data saved to {filename} successfully!")
+        wb.save(output)
+        print("Data saved successfully!")
+        return output  # Return the BytesIO buffer instead of saving to file
 
     except PermissionError as e:
-        print(f"PermissionError: {e}. Please make sure the file is not open or you have the correct permissions.")
+        st.error(f"PermissionError: {e}. Please make sure the file is not open or you have the correct permissions.")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        st.error(f"An error occurred: {e}")
+        return None
+
     
 
 def main():
@@ -534,19 +512,16 @@ def main():
             st.header("Subsegment Data")
             st.write(pd.DataFrame(subsegment_data))
 
-            filename = st.text_input("Enter the filename to save the data (with .xlsx extension):")
-
-            if st.button("Save to Excel"):
-                save_data_to_excel(base_model_data, region_data, country_data, segment_data, subsegment_data, filename)
-                st.success("Excel File saved successfully!")
-        else:
-            st.warning("No data available. Please go back and input data.")
-
+            output = save_data_to_excel(
+                base_model_data, region_data, country_data, segment_data, subsegment_data
+            )
+            
+            if output:
+                st.download_button(
+                    label="Download Excel File",
+                    data=output.getvalue(),
+                    file_name="Global Market Data.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 if __name__ == "__main__":
-    password = st.sidebar.text_input("Password", type="password")
-
-    # Check password
-    if password == PASSWORD:
-        main()  # If password is correct, run the app
-    else:
-        st.error("Incorrect password. Please try again.")
+    main()
