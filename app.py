@@ -68,6 +68,7 @@ def calculate_country_data(region_data, country_shares, country_yoy_changes, bas
                 all_countries[region] = country_values
         country_data.append((year, all_countries))
     return country_data
+    
 
 # Function to calculate segment data based on country data, segments, segment shares, segment YoY changes, base year
 def calculate_segment_data(country_data, segment_shares, segment_yoy_changes, base_year):
