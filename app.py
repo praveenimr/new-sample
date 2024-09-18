@@ -4,7 +4,6 @@ import openpyxl
 from openpyxl import load_workbook
 from openpyxl.styles import Border, Side
 from openpyxl.utils import get_column_letter
-
 st.markdown(
      """
     <style>
