@@ -5,6 +5,20 @@ from openpyxl import load_workbook
 from openpyxl.styles import Border, Side
 from openpyxl.utils import get_column_letter
 
+st.markdown(
+     """
+    <style>
+    header[data-testid="stHeader"] {
+        display: none;
+    }
+    .css-1u7wa8r.e1tzin5v3 {
+        display: none;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 PASSWORD = "IMR Creation"
 
 # Function to process country data with given base year, base value, periods, and YoY changes
